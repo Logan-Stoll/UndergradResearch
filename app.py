@@ -1,14 +1,9 @@
 from flask import Flask, request, render_template, jsonify
-from .predict.py import FakeNewsDetector
+from predict import FakeNewsDetector
 import os
 
 app = Flask(__name__)
-detector = None
-
-@app.before_first_request
-def initialize():
-    global detector
-    detector = FakeNewsDetector(models_dir="models")
+detector = FakeNewsDetector(models_dir="models")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -30,10 +25,6 @@ def predict_api():
     return jsonify(result)
 
 if __name__ == '__main__':
-    # Make sure models are loaded when running directly
-    if not detector:
-        detector = FakeNewsDetector(models_dir="models")
-    
     # Check if models exist, if not, suggest running training script
     if not os.path.exists('models/tfidf_vectorizer.pkl'):
         print("Models not found! Please run train_models.py first.")
