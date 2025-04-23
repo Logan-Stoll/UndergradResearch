@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fake News Detector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .real {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+        }
+        .fake {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fake News Detector</h1>
+        <form method="POST">
+            <p>Paste news article text below to check if it's real or fake:</p>
+            <textarea name="article_text" placeholder="Enter article text here..."></textarea>
+            <button type="submit">Analyze</button>
+        </form>
+        
+        {% if result %}
+        <div class="result {% if result.ensemble.prediction == 'Real' %}real{% else %}fake{% endif %}">
+            <h2>Analysis Result</h2>
+            <p>This article is likely <strong>{{ result.ensemble.prediction }}</strong> with {{ result.ensemble.confidence }}% confidence.</p>
+            
+            <h3>Individual Model Results:</h3>
+            <table>
+                <tr>
+                    <th>Model</th>
+                    <th>Prediction</th>
+                    <th>Confidence</th>
+                </tr>
+                <tr>
+                    <td>Decision Tree</td>
+                    <td>{{ result.decision_tree.prediction }}</td>
+                    <td>{{ result.decision_tree.confidence }}%</td>
+                </tr>
+                <tr>
+                    <td>Random Forest</td>
+                    <td>{{ result.random_forest.prediction }}</td>
+                    <td>{{ result.random_forest.confidence }}%</td>
+                </tr>
+                <tr>
+                    <td>Neural Network</td>
+                    <td>{{ result.neural_network.prediction }}</td>
+                    <td>{{ result.neural_network.confidence }}%</td>
+                </tr>
+            </table>
+            
+            <p><em>Note: This is an automated analysis and should be used as one of multiple factors to determine credibility.</em></p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
