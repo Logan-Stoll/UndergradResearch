@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Fake News Detector</title>
+    <title>Advanced Fake News Detector</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
+            line-height: 1.5;
         }
         .container {
             background-color: #f9f9f9;
@@ -15,9 +16,12 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        h1 {
+        h1, h2, h3 {
             color: #333;
+        }
+        h1 {
             text-align: center;
+            margin-bottom: 30px;
         }
         textarea {
             width: 100%;
@@ -26,23 +30,26 @@
             margin: 10px 0;
             border-radius: 5px;
             border: 1px solid #ddd;
+            font-family: inherit;
+            font-size: 14px;
         }
         button {
             background-color: #4CAF50;
             color: white;
-            padding: 10px 15px;
+            padding: 12px 20px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
+            transition: background-color 0.3s;
         }
         button:hover {
             background-color: #45a049;
         }
         .result {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 5px;
+            margin-top: 25px;
+            padding: 20px;
+            border-radius: 8px;
         }
         .real {
             background-color: #d4edda;
@@ -56,58 +63,133 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.05);
         }
         th, td {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 12px;
             text-align: left;
         }
         th {
             background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .confidence-bar {
+            height: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            margin-top: 5px;
+            position: relative;
+        }
+        .confidence-level {
+            height: 100%;
+            border-radius: 5px;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .real-bar {
+            background-color: #28a745;
+        }
+        .fake-bar {
+            background-color: #dc3545;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+        .footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Fake News Detector</h1>
+        <h1>Advanced Fake News Detector</h1>
+        
         <form method="POST">
             <p>Paste news article text below to check if it's real or fake:</p>
-            <textarea name="article_text" placeholder="Enter article text here..."></textarea>
-            <button type="submit">Analyze</button>
+            <textarea name="article_text" placeholder="Enter article text here...">{{ request.form.get('article_text', '') }}</textarea>
+            <button type="submit">Analyze Text</button>
         </form>
         
         {% if result %}
-        <div class="result {% if result.ensemble.prediction == 'Real' %}real{% else %}fake{% endif %}">
-            <h2>Analysis Result</h2>
-            <p>This article is likely <strong>{{ result.ensemble.prediction }}</strong> with {{ result.ensemble.confidence }}% confidence.</p>
-            
-            <h3>Individual Model Results:</h3>
-            <table>
-                <tr>
-                    <th>Model</th>
-                    <th>Prediction</th>
-                    <th>Confidence</th>
-                </tr>
-                <tr>
-                    <td>Decision Tree</td>
-                    <td>{{ result.decision_tree.prediction }}</td>
-                    <td>{{ result.decision_tree.confidence }}%</td>
-                </tr>
-                <tr>
-                    <td>Random Forest</td>
-                    <td>{{ result.random_forest.prediction }}</td>
-                    <td>{{ result.random_forest.confidence }}%</td>
-                </tr>
-                <tr>
-                    <td>Neural Network</td>
-                    <td>{{ result.neural_network.prediction }}</td>
-                    <td>{{ result.neural_network.confidence }}%</td>
-                </tr>
-            </table>
-            
-            <p><em>Note: This is an automated analysis and should be used as one of multiple factors to determine credibility.</em></p>
-        </div>
+            {% if result.get('error') %}
+                <div class="result" style="background-color: #fff3cd; border: 1px solid #ffeeba;">
+                    <h2>Error</h2>
+                    <p>{{ result.error }}</p>
+                </div>
+            {% else %}
+                <div class="result {% if result.ensemble.prediction == 'Real' %}real{% else %}fake{% endif %}">
+                    <h2>Analysis Result</h2>
+                    <p>This article is likely <strong>{{ result.ensemble.prediction }}</strong> with {{ result.ensemble.confidence }}% confidence.</p>
+                    
+                    <div class="confidence-bar">
+                        <div 
+                            class="confidence-level {% if result.ensemble.prediction == 'Real' %}real-bar{% else %}fake-bar{% endif %}" 
+                            style="width: {{ result.ensemble.confidence }}%;">
+                        </div>
+                    </div>
+                    
+                    <h3>Individual Model Results:</h3>
+                    <table>
+                        <tr>
+                            <th>Model</th>
+                            <th>Prediction</th>
+                            <th>Confidence</th>
+                            <th>Visualization</th>
+                        </tr>
+                        
+                        {% for model_name, model_result in result.items() %}
+                            {% if model_name != 'ensemble' and model_name != 'error' %}
+                                <tr>
+                                    <td>{{ model_name|replace('_', ' ')|title }}</td>
+                                    <td>{{ model_result.prediction }}</td>
+                                    <td>{{ model_result.confidence }}%</td>
+                                    <td style="width: 30%;">
+                                        <div class="confidence-bar">
+                                            <div 
+                                                class="confidence-level {% if model_result.prediction == 'Real' %}real-bar{% else %}fake-bar{% endif %}" 
+                                                style="width: {{ model_result.confidence }}%;">
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        <tr style="font-weight: bold; background-color: #e9ecef;">
+                            <td>Ensemble (Weighted)</td>
+                            <td>{{ result.ensemble.prediction }}</td>
+                            <td>{{ result.ensemble.confidence }}%</td>
+                            <td>
+                                <div class="confidence-bar">
+                                    <div 
+                                        class="confidence-level {% if result.ensemble.prediction == 'Real' %}real-bar{% else %}fake-bar{% endif %}" 
+                                        style="width: {{ result.ensemble.confidence }}%;">
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <p><em>Note: This is an automated analysis. For best results, verify information through trusted sources.</em></p>
+                </div>
+            {% endif %}
         {% endif %}
+        
+        <div class="footer">
+            <p>Powered by machine learning | <a href="/details">View Model Details</a></p>
+        </div>
     </div>
 </body>
 </html>

@@ -1,3 +1,4 @@
+
 from flask import Flask, request, render_template, jsonify
 from predict import FakeNewsDetector
 import os
@@ -24,9 +25,23 @@ def predict_api():
     result = detector.predict(data['text'])
     return jsonify(result)
 
+@app.route('/details')
+def details():
+    """Page showing model details and feature importance"""
+    # You could add additional visualizations here showing feature importance
+    # and model performance metrics
+    return render_template('details.html')
+
 if __name__ == '__main__':
     # Check if models exist, if not, suggest running training script
     if not os.path.exists('models/tfidf_vectorizer.pkl'):
         print("Models not found! Please run train_models.py first.")
     
-    app.run(debug=True)
+    # Print available models
+    try:
+        models_available = [f.replace('_model.pkl', '') for f in os.listdir('models') if f.endswith('_model.pkl')]
+        print(f"Available models: {', '.join(models_available)}")
+    except:
+        print("Could not list available models")
+        
+    app.run(debug=True
