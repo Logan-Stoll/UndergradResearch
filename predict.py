@@ -1,110 +1,153 @@
 import os
 import joblib
 import numpy as np
-import re
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-from textstat import flesch_reading_ease
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import nltk
+from text_parser import TextParser
+from sklearn.svm import LinearSVC
+from text_features import TextFeatureExtractor  # Import the TextFeatureExtractor class
 
 # Download required NLTK data if not already downloaded
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
-    nltk.download('punkt')
+    nltk.download('punkt', quiet=True)
     
 try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
-    nltk.download('stopwords')
+    nltk.download('stopwords', quiet=True)
     
 try:
     nltk.data.find('corpora/wordnet')
 except LookupError:
-    nltk.download('wordnet')
+    nltk.download('wordnet', quiet=True)
     
 try:
     nltk.data.find('sentiment/vader_lexicon')
 except LookupError:
-    nltk.download('vader_lexicon')
+    nltk.download('vader_lexicon', quiet=True)
 
 class FakeNewsDetector:
-    def __init__(self, models_dir="models"):
+    def __init__(self, models_dir="models", use_best_config=True):
         self.models_dir = models_dir
         self.models = {}
         self.vectorizer = None
-        self.load_models()
+        self.feature_extractor = None
+        self.text_parser = None
+        self.feature_method = 'combined'  # default
         
-    def load_models(self):
-        """Load all saved models and vectorizer"""
+        # Load configuration or models directly
+        if use_best_config:
+            self.load_best_config()
+        else:
+            self.load_models()
+        
+    def load_best_config(self):
+        """Load the best configuration based on previous training results"""
         try:
-            self.vectorizer = joblib.load(os.path.join(self.models_dir, 'tfidf_vectorizer.pkl'))
+            config_path = os.path.join(self.models_dir, 'best_config.pkl')
             
-            # Load all available models
-            model_files = [f for f in os.listdir(self.models_dir) if f.endswith('_model.pkl')]
+            if os.path.exists(config_path):
+                config = joblib.load(config_path)
+                self.feature_method = config.get('feature_method', 'combined')
+                parser_config = config.get('parser_config', {})
+                
+                print(f"Loading best configuration: {self.feature_method} feature method")
+                
+                # Initialize the text parser with saved configuration
+                self.text_parser = TextParser(**parser_config)
+                
+                # Load appropriate models and feature extractors
+                self.load_models(self.feature_method)
+            else:
+                print("No best configuration found, loading all available models.")
+                self.load_models()
+        except Exception as e:
+            print(f"Error loading best configuration: {e}")
+            print("Falling back to loading all models.")
+            self.load_models()
+    
+    def load_models(self, feature_method=None):
+        """Load models, vectorizer, and feature extractor based on feature method"""
+        try:
+            # Set feature method if provided
+            if feature_method:
+                self.feature_method = feature_method
+            
+            # Initialize text parser if not already initialized
+            if self.text_parser is None:
+                self.text_parser = TextParser()
+            
+            # Load TF-IDF vectorizer if using TF-IDF or combined features
+            if self.feature_method in ['tfidf', 'combined']:
+                vectorizer_path = os.path.join(self.models_dir, 'tfidf_vectorizer.pkl')
+                if os.path.exists(vectorizer_path):
+                    self.vectorizer = joblib.load(vectorizer_path)
+                else:
+                    print(f"Warning: TF-IDF vectorizer not found at {vectorizer_path}")
+            
+            # Load feature extractor if using sentiment or combined features
+            if self.feature_method in ['sentiment', 'combined']:
+                extractor_path = os.path.join(self.models_dir, 'text_feature_extractor.pkl')
+                if os.path.exists(extractor_path):
+                    self.feature_extractor = joblib.load(extractor_path)
+                else:
+                    print(f"Warning: Text feature extractor not found at {extractor_path}")
+            
+            # Load all models with the appropriate feature method in the filename
+            model_files = [f for f in os.listdir(self.models_dir) 
+                          if f.endswith('_model.pkl') and (
+                              self.feature_method in f or 
+                              not any(method in f for method in ['tfidf', 'sentiment', 'combined'])
+                          )]
+            
             for model_file in model_files:
-                model_name = model_file.replace('_model.pkl', '')
+                # Extract model name without feature method and _model.pkl suffix
+                if self.feature_method in model_file:
+                    model_name = model_file.replace(f'_{self.feature_method}_model.pkl', '')
+                else:
+                    model_name = model_file.replace('_model.pkl', '')
+                
                 self.models[model_name] = joblib.load(os.path.join(self.models_dir, model_file))
                 
             print(f"Loaded {len(self.models)} models successfully!")
+            print(f"Available models: {', '.join(self.models.keys())}")
+            
+            # If no models were loaded, try loading any model
+            if len(self.models) == 0:
+                print("No models found for the specified feature method. Loading any available models.")
+                all_model_files = [f for f in os.listdir(self.models_dir) if f.endswith('_model.pkl')]
+                
+                for model_file in all_model_files:
+                    model_name = model_file.replace('_model.pkl', '')
+                    if '_' in model_name:  # Handle feature method in filename
+                        model_name = model_name.split('_')[0]
+                    
+                    self.models[model_name] = joblib.load(os.path.join(self.models_dir, model_file))
+                
+                print(f"Loaded {len(self.models)} alternative models.")
+            
         except Exception as e:
             print(f"Error loading models: {e}")
             raise
     
-    def preprocess_text(self, text):
-        """Clean and preprocess text data"""
-        # Convert to lowercase
-        text = text.lower()
-        # Remove HTML tags
-        text = re.sub(r'<.*?>', '', text)
-        # Remove URLs
-        text = re.sub(r'http\S+|www\S+|https\S+', '', text)
-        # Remove special characters and numbers
-        text = re.sub(r'[^\w\s]', '', text)
-        text = re.sub(r'\d+', '', text)
-        # Tokenize
-        tokens = nltk.word_tokenize(text)
-        # Remove stopwords
-        stop_words = set(stopwords.words('english'))
-        tokens = [word for word in tokens if word not in stop_words]
-        # Lemmatize
-        lemmatizer = WordNetLemmatizer()
-        tokens = [lemmatizer.lemmatize(word) for word in tokens]
-        # Join tokens back into string
-        processed_text = ' '.join(tokens)
-        return processed_text
-    
-    def extract_text_features(self, text):
-        """Extract additional features from text"""
-        # Basic text statistics
-        word_count = len(text.split())
-        sentence_count = len(nltk.sent_tokenize(text))
-        avg_word_length = sum(len(word) for word in text.split()) / max(1, word_count)
+    def extract_features(self, text, processed_text=None):
+        """Extract features based on the feature method"""
+        if processed_text is None:
+            processed_text = self.text_parser.parse(text)
         
-        # Readability
-        try:
-            readability = flesch_reading_ease(text)
-        except:
-            readability = 50  # Default value
+        features = {}
         
-        # Sentiment analysis
-        sia = SentimentIntensityAnalyzer()
-        sentiment = sia.polarity_scores(text)
+        # Extract TF-IDF features if using TF-IDF or combined approach
+        if self.feature_method in ['tfidf', 'combined'] and self.vectorizer:
+            features['tfidf'] = self.vectorizer.transform([processed_text])
         
-        # Count special characters
-        exclamation_count = text.count('!')
-        question_count = text.count('?')
+        # Extract text features if using sentiment or combined approach
+        if self.feature_method in ['sentiment', 'combined'] and self.feature_extractor:
+            features['text_features'] = self.feature_extractor.transform([text])
         
-        return [
-            word_count, 
-            sentence_count, 
-            avg_word_length,
-            readability,
-            sentiment['compound'],
-            exclamation_count,
-            question_count
-        ]
+        return features
     
     def predict(self, article_text):
         """Predict whether the given article text is fake or real news"""
@@ -112,33 +155,48 @@ class FakeNewsDetector:
             return {"error": "Empty text provided"}
             
         try:
-            # Preprocess the text
-            processed_text = self.preprocess_text(article_text)
+            # Process the text using text_parser
+            processed_text = self.text_parser.parse(article_text)
             
-            # Vectorize the preprocessed text
-            text_vector = self.vectorizer.transform([processed_text])
+            # Extract features based on the feature method
+            features = self.extract_features(article_text, processed_text)
             
-            # Extract additional features
-            additional_features = np.array([self.extract_text_features(article_text)])
-            
-            # Combine features for models that use them
-            text_vector_dense = text_vector.toarray()
-            combined_features = np.hstack((text_vector_dense, additional_features))
-            
+            # Initialize results dictionary
             results = {}
             
             # Get predictions from each model
             for model_name, model in self.models.items():
                 try:
-                    # Naive Bayes only uses TF-IDF features
-                    if model_name == 'naive_bayes':
-                        prediction = model.predict(text_vector)[0]
-                        probabilities = model.predict_proba(text_vector)[0]
-                    else:
-                        prediction = model.predict(combined_features)[0]
-                        probabilities = model.predict_proba(combined_features)[0]
+                    # Prepare features for this model
+                    if model_name == 'naive_bayes' and self.feature_method == 'combined':
+                        # Naive Bayes only uses TF-IDF features
+                        X = features['tfidf']
+                    elif self.feature_method == 'tfidf':
+                        X = features['tfidf']
+                    elif self.feature_method == 'sentiment':
+                        X = features['text_features']
+                    else:  # combined
+                        X_tfidf = features['tfidf'].toarray()
+                        X_text = features['text_features']
+                        X = np.hstack((X_tfidf, X_text))
                         
-                    confidence = max(probabilities) * 100
+                    # Make prediction
+                    prediction = model.predict(X)[0]
+                    
+                    # Handle LinearSVC which doesn't have predict_proba
+                    if hasattr(model, 'predict_proba'):
+                        probabilities = model.predict_proba(X)[0]
+                        confidence = max(probabilities) * 100
+                    elif isinstance(model, LinearSVC) or hasattr(model, 'decision_function'):
+                        # For LinearSVC, use decision function to approximate confidence
+                        decision_score = model.decision_function(X)[0]
+                        # Convert to probability-like value between 0 and 1
+                        if isinstance(decision_score, np.ndarray):
+                            decision_score = abs(decision_score).max()
+                        confidence = min(100, max(50, 50 + abs(decision_score) * 10))
+                    else:
+                        # Fallback for models without probability or decision function
+                        confidence = 70.0
                     
                     results[model_name] = {
                         'prediction': 'Real' if prediction == 1 else 'Fake',
@@ -152,12 +210,12 @@ class FakeNewsDetector:
                     }
             
             # Calculate ensemble prediction (weighted vote)
-            if all('prediction' in results[model] for model in results):
+            if results and all('prediction' in results.get(model, {}) for model in results):
                 # Weight by confidence
                 real_sum = sum(results[model]['confidence'] for model in results 
-                              if results[model]['prediction'] == 'Real')
+                              if results[model].get('prediction') == 'Real')
                 fake_sum = sum(results[model]['confidence'] for model in results 
-                              if results[model]['prediction'] == 'Fake')
+                              if results[model].get('prediction') == 'Fake')
                 
                 ensemble_pred = 'Real' if real_sum > fake_sum else 'Fake'
                 
@@ -168,10 +226,5 @@ class FakeNewsDetector:
                 
                 results['ensemble'] = {
                     'prediction': ensemble_pred,
-                    'confidence': round(weighted_confidence, 2)
+                    'confidence': round(weighted_confidence, 2),
                 }
-            
-            return results
-            
-        except Exception as e:
-            return {"error": f"Prediction error: {str(e)}"}
