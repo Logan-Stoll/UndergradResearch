@@ -48,7 +48,7 @@ def parse_text(text):
 
     # If you are pulling this from the repo you will want this uncommented
     # Comment this line out if already downloaded
-    # download_nltk_resources()
+    download_nltk_resources()
     
     # Clean the text and normalize all whitespace
     text = clean_text(text)
