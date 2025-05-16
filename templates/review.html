@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Extracted Text</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .main-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-top: 40px;
+        }
+        .title {
+            color: #495057;
+            margin-bottom: 30px;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 400px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9rem;
+        }
+        .btn-analyze {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 30px;
+            font-weight: bold;
+        }
+        .url-display {
+            font-size: 0.9rem;
+            word-break: break-all;
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="main-container">
+                    <h1 class="text-center title">Review Extracted Text</h1>
+                    
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <div class="alert alert-info">
+                        <p><strong>Please review the extracted text below.</strong> You can edit or remove any unwanted content (such as advertisements, popups, etc.) before proceeding with the analysis.</p>
+                    </div>
+                    
+                    <div class="url-display">
+                        <strong>Source URL:</strong> <a href="{{ article_url }}" target="_blank">{{ article_url }}</a>
+                    </div>
+                    
+                    <form action="/predict" method="post">
+                        <input type="hidden" name="article_url" value="{{ article_url }}">
+                        
+                        <div class="mb-3">
+                            <label for="article_text" class="form-label">Article Text:</label>
+                            <textarea class="form-control" id="article_text" name="article_text" required>{{ article_text }}</textarea>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="/" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-analyze">Analyze Content</button>
+                        </div>
+                    </form>
+                    
+                    <div class="mt-4">
+                        <h5>Common Elements to Remove:</h5>
+                        <ul class="small">
+                            <li>"Advertisement" or "SKIP ADVERTISEMENT" text</li>
+                            <li>"You have a preview view of this article"</li>
+                            <li>"Subscribe now" or subscription notices</li>
+                            <li>Social media links and share buttons text</li>
+                            <li>Cookie policy notices</li>
+                            <li>Comments and reader feedback</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
